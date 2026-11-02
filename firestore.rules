@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /enrollments/{enrollmentId} {
+      function hasExpectedFields() {
+        return request.resource.data.keys().hasAll([
+            'name',
+            'email',
+            'phone',
+            'program',
+            'modality',
+            'schedule',
+            'message',
+            'createdAt',
+            'status'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'name',
+            'email',
+            'phone',
+            'program',
+            'modality',
+            'schedule',
+            'message',
+            'createdAt',
+            'status'
+          ]);
+      }
+
+      allow create: if hasExpectedFields()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('^[^@]+@[^@]+\\.[^@]+$')
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 25
+        && request.resource.data.program in [
+          'ingles-conversacion',
+          'tutorias-escolares',
+          'ingles-personalizado'
+        ]
+        && request.resource.data.modality in ['online', 'presencial', 'flexible']
+        && request.resource.data.schedule in ['manana', 'tarde', 'flexible']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 600
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'new';
+
+      allow read, update, delete: if false;
+    }
+  }
+}
