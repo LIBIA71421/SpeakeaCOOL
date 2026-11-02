@@ -20,26 +20,34 @@ const courses = [
   {
     number: "01",
     icon: MessageCircle,
-    title: "Inglés conversacional",
-    description: "Habla con seguridad desde el primer día. Sin miedo a equivocarte.",
-    tag: "El favorito",
+    title: "Inglés desde cero",
+    description: "Empieza con vocabulario y estructuras esenciales, con una ruta paso a paso.",
+    tag: "Nivel inicial",
     color: "coral",
   },
   {
     number: "02",
     icon: BookOpen,
-    title: "Tutorías escolares",
-    description: "Un empujoncito en esas materias que necesitan más atención.",
-    tag: "A tu ritmo",
+    title: "Inglés básico",
+    description: "Refuerza gramática, lectura y escritura con ejercicios a tu medida.",
+    tag: "Construye bases",
     color: "blue",
   },
   {
     number: "03",
     icon: Globe2,
-    title: "Inglés personalizado",
-    description: "Prepara tus metas, tu viaje o esa próxima gran oportunidad.",
-    tag: "1:1 contigo",
+    title: "Inglés intermedio",
+    description: "Trabaja con textos y actividades de writing según tu nivel y tus objetivos.",
+    tag: "Sigue avanzando",
     color: "green",
+  },
+  {
+    number: "04",
+    icon: BookOpen,
+    title: "Tutorías escolares",
+    description: "Apoyo personalizado en el tema que necesites. Cuéntanos qué materia quieres reforzar.",
+    tag: "A pedido",
+    color: "blue",
   },
 ];
 
@@ -118,8 +126,8 @@ function App() {
         </button>
         <nav className={`main-nav${mobileMenuOpen ? " is-open" : ""}`} aria-label="Navegación principal">
           <a href="#programas" onClick={closeMobileMenu}>Programas</a>
-          <a href="#nosotros" onClick={closeMobileMenu}>Nuestra onda</a>
-          <a href="#opiniones" onClick={closeMobileMenu}>Opiniones</a>
+          <a href="#metodo" onClick={closeMobileMenu}>Cómo funciona</a>
+          <a href="#preguntas" onClick={closeMobileMenu}>Preguntas frecuentes</a>
           <a className="nav-cta" href="#inscripcion" onClick={closeMobileMenu}>
             Quiero empezar <ArrowUpRight size={15} />
           </a>
@@ -132,29 +140,21 @@ function App() {
             <div className="eyebrow"><span className="eyebrow-dot" /> APRENDER SE SIENTE DIFERENTE</div>
             <h1>Tu próximo<br />gran <span>«hello».</span></h1>
             <p className="hero-description">
-              Menos memorizar. Más conversar, descubrir y llegar más lejos. Aprender puede ser
-              tu parte favorita del día.
+              Clases personales de inglés y tutorías escolares, con materiales adaptados a tu nivel
+              y a lo que quieres lograr. En Cochabamba o en línea desde cualquier departamento.
             </p>
             <div className="hero-actions">
               <a className="button button-dark" href="#inscripcion">
                 Encuentra tu programa <ArrowRight size={17} />
               </a>
-              <a className="text-link" href="#programas">
+              <a className="text-link" href="#metodo">
                 <span className="play-icon"><Play size={13} fill="currentColor" /></span>
                 Conoce cómo aprendemos
               </a>
             </div>
             <div className="hero-proof">
-              <div className="avatar-stack" aria-hidden="true">
-                <span className="avatar avatar-one">M</span>
-                <span className="avatar avatar-two">J</span>
-                <span className="avatar avatar-three">A</span>
-                <span className="avatar avatar-four">L</span>
-              </div>
-              <div>
-                <div className="proof-stars" aria-label="5 de 5 estrellas">★★★★★</div>
-                <p>Una comunidad que aprende unida</p>
-              </div>
+              <span className="proof-icon"><CheckCircle2 size={18} /></span>
+              <p>Evaluación de nivel y clase de prueba gratuitas</p>
             </div>
           </div>
 
@@ -163,7 +163,7 @@ function App() {
               <img
                 className="hero-image"
                 src="https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=1100&q=85"
-                alt="Estudiantes aprendiendo y conversando en un espacio luminoso"
+                alt="Estudiante realizando actividades escolares"
               />
               <div className="image-label"><span /> AQUÍ SE HABLA, SE RÍE Y SE APRENDE</div>
             </div>
@@ -182,10 +182,10 @@ function App() {
 
         <section className="stats-strip" aria-label="SpeakeaCOOL en números">
           <div className="stats-inner">
-            <p>Un espacio para avanzar<br />a tu propio ritmo.</p>
-            <div className="stat"><strong>100<span>%</span></strong><small>Enfoque en ti</small></div>
-            <div className="stat"><strong>1:1</strong><small>Atención cercana</small></div>
-            <div className="stat"><strong>∞</strong><small>Formas de aprender</small></div>
+            <p>Información clara para<br />dar el primer paso.</p>
+            <div className="stat"><strong>50 <span>Bs</span></strong><small>Por hora de clase</small></div>
+            <div className="stat"><strong>1:1</strong><small>Atención personal</small></div>
+            <div className="stat"><strong>Gratis</strong><small>Evaluación y clase de prueba</small></div>
             <div className="stats-sparkle"><Sparkles size={23} /></div>
           </div>
         </section>
@@ -193,10 +193,10 @@ function App() {
         <section className="programs section-shell" id="programas">
           <div className="section-heading">
             <div>
-              <div className="eyebrow"><span className="eyebrow-dot" /> UN PLAN HECHO PARA TI</div>
-              <h2>¿Qué te gustaría<br />lograr <span>hoy?</span></h2>
+              <div className="eyebrow"><span className="eyebrow-dot" /> RUTAS SEGÚN TU NIVEL</div>
+              <h2>Un buen lugar<br />para <span>empezar.</span></h2>
             </div>
-            <p>Grandes metas, pequeños pasos. Elige por dónde empezar y nosotros te acompañamos.</p>
+            <p>Estas rutas son una guía inicial: en la evaluación vemos qué sabes y ajustamos el contenido contigo.</p>
           </div>
           <div className="course-grid">
             {courses.map(({ number, icon: Icon, title, description, tag, color }) => (
@@ -227,46 +227,93 @@ function App() {
             <div className="eyebrow"><span className="eyebrow-dot" /> NUESTRA FILOSOFÍA</div>
             <h2>Aprender sin<br />miedo. <span>Así sí.</span></h2>
             <p>
-              Aquí no necesitas saberlo todo. Solo tener ganas de intentarlo. Creamos un espacio
-              cálido, cercano y lleno de buena onda para que cada persona encuentre su voz.
+              Cada persona parte de un punto distinto. Por eso las clases y los materiales se
+              preparan de manera personal, según el nivel, el ritmo y el tema que quieras trabajar.
             </p>
             <ul className="value-list">
-              <li><span><Check size={14} /></span> Clases con personas reales, no robots</li>
-              <li><span><Check size={14} /></span> Ritmo personalizado, cero presión</li>
-              <li><span><Check size={14} /></span> Avances que se sienten en la vida real</li>
+              <li><span><Check size={14} /></span> Evaluación inicial para conocer tu nivel</li>
+              <li><span><Check size={14} /></span> Material personalizado para cada clase</li>
+              <li><span><Check size={14} /></span> Horarios coordinados según disponibilidad</li>
             </ul>
             <a className="text-link manifesto-link" href="#inscripcion">
-              Conoce tu siguiente paso <ArrowRight size={16} />
+              Cuéntanos qué necesitas <ArrowRight size={16} />
             </a>
           </div>
         </section>
 
-        <section className="testimonial-section" id="opiniones">
-          <div className="testimonial-sparkle sparkle-left"><Sparkles size={24} /></div>
-          <div className="testimonial-content">
-            <div className="eyebrow"><span className="eyebrow-dot" /> PALABRAS BONITAS, PROGRESO REAL</div>
-            <div className="testimonial-stars" aria-label="5 de 5 estrellas">★★★★★</div>
-            <blockquote>
-              “Por primera vez, aprender inglés se siente como platicar con amigos. Ya no me da
-              pena equivocarme.”
-            </blockquote>
-            <div className="testimonial-author">
-              <span className="author-avatar">S</span>
-              <span><strong>Sofía R.</strong><small>Alumna de inglés conversacional</small></span>
+        <section className="method-section section-shell" id="metodo">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow"><span className="eyebrow-dot" /> ASÍ EMPEZAMOS</div>
+              <h2>Un plan claro,<br /><span>a tu medida.</span></h2>
+            </div>
+            <p>Primero conocemos tus objetivos y luego acordamos el contenido y el horario de las clases.</p>
+          </div>
+          <div className="method-grid">
+            <article className="method-card">
+              <span className="method-number">01</span>
+              <h3>Conocemos tu punto de partida</h3>
+              <p>Conversamos sobre lo que necesitas y hacemos una evaluación de nivel sin costo.</p>
+            </article>
+            <article className="method-card">
+              <span className="method-number">02</span>
+              <h3>Probamos una clase</h3>
+              <p>Tomas una clase de prueba gratuita para conocer la dinámica y definir tus prioridades.</p>
+            </article>
+            <article className="method-card">
+              <span className="method-number">03</span>
+              <h3>Avanzamos a tu ritmo</h3>
+              <p>Preparamos material personalizado y coordinamos cada horario según disponibilidad.</p>
+            </article>
+          </div>
+          <div className="service-note">
+            <span className="service-note-icon"><Globe2 size={18} /></span>
+            <p><strong>En Cochabamba o en línea.</strong> Las clases presenciales se coordinan en Cochabamba; la modalidad online está disponible para otros departamentos.</p>
+          </div>
+        </section>
+
+        <section className="faq-section" id="preguntas">
+          <div className="faq-inner section-shell">
+            <div className="section-heading">
+              <div>
+                <div className="eyebrow"><span className="eyebrow-dot" /> ANTES DE EMPEZAR</div>
+                <h2>Preguntas<br /><span>frecuentes.</span></h2>
+              </div>
+              <p>¿Te queda alguna duda? Déjanos un mensaje y conversamos sobre lo que necesitas.</p>
+            </div>
+            <div className="faq-list">
+              <details className="faq-item">
+                <summary>¿Cuánto cuesta una clase?</summary>
+                <p>La clase regular cuesta 50 Bs por hora. La evaluación de nivel y la clase de prueba son gratuitas.</p>
+              </details>
+              <details className="faq-item">
+                <summary>¿Para qué edades y niveles hay clases?</summary>
+                <p>Atendemos a personas de todas las edades. Las actividades y los materiales se ajustan a tu nivel y a tus objetivos.</p>
+              </details>
+              <details className="faq-item">
+                <summary>¿Puedo tomar clases desde otro departamento?</summary>
+                <p>Sí. Ofrecemos clases en línea para estudiantes de otros departamentos y clases presenciales en Cochabamba.</p>
+              </details>
+              <details className="faq-item">
+                <summary>¿Qué horarios tienen?</summary>
+                <p>Los horarios se coordinan según la disponibilidad del estudiante y del tutor.</p>
+              </details>
+              <details className="faq-item">
+                <summary>¿Qué temas puedo estudiar?</summary>
+                <p>En inglés trabajamos gramática, lectura y escritura de acuerdo con tu nivel. También puedes consultar por tutorías escolares en el tema que necesites reforzar.</p>
+              </details>
             </div>
           </div>
-          <div className="testimonial-decoration" aria-hidden="true">“</div>
-          <div className="testimonial-sparkle sparkle-right"><Sparkles size={18} /></div>
         </section>
 
         <section className="enrollment-section section-shell" id="inscripcion">
           <div className="enrollment-intro">
             <div className="eyebrow"><span className="eyebrow-dot" /> TU SIGUIENTE PASO EMPIEZA AQUÍ</div>
             <h2>Vamos a hacer<br />que <span>suceda.</span></h2>
-            <p>Cuéntanos un poquito de ti. Nos pondremos en contacto para encontrar el programa perfecto para tus metas.</p>
+            <p>Cuéntanos tu nivel, qué quieres aprender y qué horarios te sirven. Coordinaremos una evaluación y una clase de prueba gratuitas.</p>
             <div className="enrollment-promise">
               <span className="promise-icon"><MessageCircle size={18} /></span>
-              <span><strong>Sin compromiso</strong><small>Solo una conversación para empezar.</small></span>
+              <span><strong>Empieza gratis</strong><small>Evaluación de nivel y clase de prueba.</small></span>
             </div>
             <div className="enrollment-arrow" aria-hidden="true"><ArrowDown size={28} /></div>
           </div>
@@ -325,9 +372,9 @@ function App() {
                     value={form.program}
                     onChange={(event) => updateField("program", event.target.value as Enrollment["program"])}
                   >
-                    <option value="ingles-conversacion">Inglés conversacional</option>
+                    <option value="ingles-conversacion">Inglés (desde cero, básico o intermedio)</option>
                     <option value="tutorias-escolares">Tutorías escolares</option>
-                    <option value="ingles-personalizado">Inglés personalizado</option>
+                    <option value="ingles-personalizado">Refuerzo de inglés a medida</option>
                   </select>
                   <ChevronDown size={16} />
                 </span>
@@ -363,7 +410,7 @@ function App() {
                 <span>Algo más que quieras contarnos <small>opcional</small></span>
                 <textarea
                   name="message"
-                  placeholder="Tus metas, dudas o cualquier cosa..."
+                  placeholder="Tu nivel, el tema que quieres trabajar o tus horarios..."
                   maxLength={600}
                   rows={2}
                   value={form.message}
