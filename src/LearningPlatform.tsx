@@ -13,9 +13,12 @@ import {
   MonitorUp,
   Printer,
   Send,
+  Square,
   Upload,
   Video,
+  Volume2,
 } from "lucide-react";
+import { SpeechService, StudyAssistantClient } from "./assistant";
 import {
   getAccountProfile,
   downloadAccountFile,
@@ -36,8 +39,11 @@ import { practiceSheets, studyUnits } from "./studyMaterials";
 type Props = { onExit: () => void };
 type Section = "home" | "materials" | "room" | "library" | "assistant";
 
-const assistantEndpoint = import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined;
+const assistantEndpoint =
+  (import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined) ||
+  "https://us-central1-speakeacool.cloudfunctions.net/studyAssistant";
 const allowedFileTypes = ".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg";
+const speechService = new SpeechService();
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -248,6 +254,7 @@ function PortalDashboard({
   const [copied, setCopied] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [answerSources, setAnswerSources] = useState<string[]>([]);
   const [assistantError, setAssistantError] = useState("");
   const [asking, setAsking] = useState(false);
 
@@ -341,33 +348,16 @@ function PortalDashboard({
     setAssistantError("");
     setAnswer("");
     try {
-      const token = await user.getIdToken();
-      const response = await fetch(assistantEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          question: question.trim(),
-          documentIds: files
-            .filter((file) => profile.role !== "teacher" || file.ownerUid === profile.uid)
-            .map((file) => file.id),
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`El servicio de estudio respondió con error (${response.status}).`);
-      }
-      const result: unknown = await response.json();
-      if (
-        typeof result !== "object" ||
-        result === null ||
-        !("answer" in result) ||
-        typeof result.answer !== "string"
-      ) {
-        throw new Error("La respuesta del asistente no tiene el formato esperado.");
-      }
+      const client = new StudyAssistantClient(assistantEndpoint);
+      const result = await client.ask(
+        user,
+        question.trim(),
+        files
+          .filter((file) => profile.role !== "teacher" || file.ownerUid === profile.uid)
+          .map((file) => file.id),
+      );
       setAnswer(result.answer);
+      setAnswerSources(result.sources);
     } catch (error) {
       setAssistantError(getErrorMessage(error));
     } finally {
@@ -476,11 +466,15 @@ function PortalDashboard({
           <AssistantSection
             question={question}
             answer={answer}
+            sources={answerSources}
             error={assistantError}
             asking={asking}
             connected={Boolean(assistantEndpoint)}
             onQuestionChange={setQuestion}
             onSubmit={askAssistant}
+            onSpeak={(text) => speechService.speak(text)}
+            onStopSpeaking={() => speechService.stop()}
+            speechAvailable={speechService.available}
           />
         )}
       </main>
@@ -746,19 +740,27 @@ function LibrarySection({
 function AssistantSection({
   question,
   answer,
+  sources,
   error,
   asking,
   connected,
   onQuestionChange,
   onSubmit,
+  onSpeak,
+  onStopSpeaking,
+  speechAvailable,
 }: {
   question: string;
   answer: string;
+  sources: string[];
   error: string;
   asking: boolean;
   connected: boolean;
   onQuestionChange: (question: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSpeak: (text: string) => void;
+  onStopSpeaking: () => void;
+  speechAvailable: boolean;
 }) {
   return (
     <section className="portal-content">
@@ -787,10 +789,33 @@ function AssistantSection({
         </button>
       </form>
       {error && <p className="portal-feedback error" role="alert">{error}</p>}
-      {answer && <article className="assistant-answer"><span>RESPUESTA</span><p>{answer}</p></article>}
+      {answer && (
+        <article className="assistant-answer">
+          <div className="assistant-answer-heading">
+            <span>RESPUESTA DEL PROFE BOT</span>
+            {speechAvailable && (
+              <button className="brutal-button button-light" onClick={() => onSpeak(answer)} type="button">
+                <Volume2 size={15} /> ESCUCHAR
+              </button>
+            )}
+            {speechAvailable && (
+              <button className="brutal-button button-light" onClick={onStopSpeaking} type="button">
+                <Square size={13} /> PARAR VOZ
+              </button>
+            )}
+          </div>
+          <p>{answer}</p>
+          {sources.length > 0 && (
+            <div className="assistant-sources">
+              <strong>CONSULTÉ ESTAS FUENTES:</strong>
+              <ul>{sources.map((source) => <li key={source}>{source}</li>)}</ul>
+            </div>
+          )}
+        </article>
+      )}
       <div className="assistant-contract">
         <strong>CONTRATO DE API</strong>
-        <code>POST {"{question, documentIds}"} · Authorization: Bearer &lt;Firebase ID token&gt; · {"{answer: string}"}</code>
+        <code>POST {"{question, documentIds}"} · Authorization: Bearer &lt;Firebase ID token&gt; · {"{answer, sources}"}</code>
       </div>
     </section>
   );
