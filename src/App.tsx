@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -14,7 +14,10 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { saveEnrollment, type Enrollment } from "./firebase";
+import teacherPhoto from "./teacher.jpeg";
+import type { Enrollment } from "./enrollment";
+
+const LearningPlatform = lazy(() => import("./LearningPlatform"));
 
 const courses = [
   {
@@ -68,6 +71,7 @@ function App() {
     null,
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [portalOpen, setPortalOpen] = useState(window.location.hash === "#aula");
 
   function updateField<K extends keyof Enrollment>(field: K, value: Enrollment[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -79,6 +83,7 @@ function App() {
     setIsSubmitting(true);
 
     try {
+      const { saveEnrollment } = await import("./enrollment");
       await saveEnrollment({
         ...form,
         name: form.name.trim(),
@@ -108,6 +113,19 @@ function App() {
     setMobileMenuOpen(false);
   }
 
+  if (portalOpen) {
+    return (
+      <Suspense fallback={<div className="portal-loading"><span className="brutal-mark">S!</span><p>ABRIENDO EL AULA…</p></div>}>
+        <LearningPlatform
+          onExit={() => {
+            window.location.hash = "inicio";
+            setPortalOpen(false);
+          }}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <>
       <header className="site-header">
@@ -128,6 +146,9 @@ function App() {
           <a href="#programas" onClick={closeMobileMenu}>Programas</a>
           <a href="#metodo" onClick={closeMobileMenu}>Cómo funciona</a>
           <a href="#preguntas" onClick={closeMobileMenu}>Preguntas frecuentes</a>
+          <a className="portal-nav-link" href="#aula" onClick={() => setPortalOpen(true)}>
+            AULA DIGITAL <ArrowUpRight size={15} />
+          </a>
           <a className="nav-cta" href="#inscripcion" onClick={closeMobileMenu}>
             Quiero empezar <ArrowUpRight size={15} />
           </a>
@@ -140,12 +161,14 @@ function App() {
             <div className="eyebrow"><span className="eyebrow-dot" /> APRENDER SE SIENTE DIFERENTE</div>
             <h1>Tu próximo<br />gran <span>«hello».</span></h1>
             <p className="hero-description">
-              Clases personales de inglés y tutorías escolares, con materiales adaptados a tu nivel
-              y a lo que quieres lograr. En Cochabamba o en línea desde cualquier departamento.
+              Soy Leonardo Rafael Javier Machicado Encinas, tutor de inglés y estudiante de
+              Comunicación Social en la Universidad Mayor de San Simón. Hace años que enseño desde
+              una mirada viva, práctica y cercana: aprender inglés no es solo estudiar papel y hoja,
+              sino vivirlo, escuchar, hablar, equivocarse y avanzar sin miedo.
             </p>
             <div className="hero-actions">
               <a className="button button-dark" href="#inscripcion">
-                Encuentra tu programa <ArrowRight size={17} />
+                Reserva tu primera clase <ArrowRight size={17} />
               </a>
               <a className="text-link" href="#metodo">
                 <span className="play-icon"><Play size={13} fill="currentColor" /></span>
@@ -154,7 +177,7 @@ function App() {
             </div>
             <div className="hero-proof">
               <span className="proof-icon"><CheckCircle2 size={18} /></span>
-              <p>Evaluación de nivel y clase de prueba gratuitas</p>
+              <p>Evaluación de nivel y clase de prueba por 30 Bs</p>
             </div>
           </div>
 
@@ -162,8 +185,8 @@ function App() {
             <div className="hero-image-frame">
               <img
                 className="hero-image"
-                src="https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=1100&q=85"
-                alt="Estudiante realizando actividades escolares"
+                src={teacherPhoto}
+                alt="Leonardo Rafael Javier Machicado Encinas, tutor de inglés"
               />
               <div className="image-label"><span /> AQUÍ SE HABLA, SE RÍE Y SE APRENDE</div>
             </div>
@@ -183,9 +206,9 @@ function App() {
         <section className="stats-strip" aria-label="SpeakeaCOOL en números">
           <div className="stats-inner">
             <p>Información clara para<br />dar el primer paso.</p>
-            <div className="stat"><strong>50 <span>Bs</span></strong><small>Por hora de clase</small></div>
+            <div className="stat"><strong>30 <span>Bs</span></strong><small>Primera clase y examen</small></div>
             <div className="stat"><strong>1:1</strong><small>Atención personal</small></div>
-            <div className="stat"><strong>Gratis</strong><small>Evaluación y clase de prueba</small></div>
+            <div className="stat"><strong>+591 69776391</strong><small>Contacto directo por WhatsApp</small></div>
             <div className="stats-sparkle"><Sparkles size={23} /></div>
           </div>
         </section>
@@ -217,23 +240,25 @@ function App() {
         <section className="manifesto" id="nosotros">
           <div className="manifesto-image">
             <img
-              src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1100&q=85"
-              alt="Compañeros compartiendo una experiencia de aprendizaje"
+              src={teacherPhoto}
+              alt="Leonardo Machicado, tutor de inglés"
               loading="lazy"
             />
             <div className="manifesto-sticker"><span>GOOD<br />VIBES</span><Sparkles size={17} /></div>
           </div>
           <div className="manifesto-copy">
-            <div className="eyebrow"><span className="eyebrow-dot" /> NUESTRA FILOSOFÍA</div>
+            <div className="eyebrow"><span className="eyebrow-dot" /> MI FILOSOFÍA</div>
             <h2>Aprender sin<br />miedo. <span>Así sí.</span></h2>
             <p>
-              Cada persona parte de un punto distinto. Por eso las clases y los materiales se
-              preparan de manera personal, según el nivel, el ritmo y el tema que quieras trabajar.
+              Mi relación con el inglés empezó mucho antes que mis estudios formales. Lo practico
+              desde la cuna y lo fui viviendo de manera constante, y eso fue lo que realmente me
+              ayudó a internalizarlo. Por eso enseño de otra forma: no memorizamos sin sentido,
+              hablamos, escuchamos, nos equivocamos, y poco a poco lo hacemos parte de nosotros.
             </p>
             <ul className="value-list">
-              <li><span><Check size={14} /></span> Evaluación inicial para conocer tu nivel</li>
-              <li><span><Check size={14} /></span> Material personalizado para cada clase</li>
-              <li><span><Check size={14} /></span> Horarios coordinados según disponibilidad</li>
+              <li><span><Check size={14} /></span> Acompañamiento real y adaptado a tu ritmo</li>
+              <li><span><Check size={14} /></span> Clases enfocadas en conversación y uso práctico</li>
+              <li><span><Check size={14} /></span> Material pensado para tus metas y tu día a día</li>
             </ul>
             <a className="text-link manifesto-link" href="#inscripcion">
               Cuéntanos qué necesitas <ArrowRight size={16} />
@@ -253,17 +278,17 @@ function App() {
             <article className="method-card">
               <span className="method-number">01</span>
               <h3>Conocemos tu punto de partida</h3>
-              <p>Conversamos sobre lo que necesitas y hacemos una evaluación de nivel sin costo.</p>
+              <p>Conversamos sobre lo que necesitas y hacemos una evaluación de nivel para ver tu punto de partida.</p>
             </article>
             <article className="method-card">
               <span className="method-number">02</span>
-              <h3>Probamos una clase</h3>
-              <p>Tomas una clase de prueba gratuita para conocer la dinámica y definir tus prioridades.</p>
+              <h3>Probamos la dinámica</h3>
+              <p>Tu primera clase y examen tienen un valor de 30 Bs, para que puedas empezar con una base real.</p>
             </article>
             <article className="method-card">
               <span className="method-number">03</span>
               <h3>Avanzamos a tu ritmo</h3>
-              <p>Preparamos material personalizado y coordinamos cada horario según disponibilidad.</p>
+              <p>Preparamos material personalizado y coordinamos cada horario según tu disponibilidad y tus metas.</p>
             </article>
           </div>
           <div className="service-note">
@@ -283,8 +308,8 @@ function App() {
             </div>
             <div className="faq-list">
               <details className="faq-item">
-                <summary>¿Cuánto cuesta una clase?</summary>
-                <p>La clase regular cuesta 50 Bs por hora. La evaluación de nivel y la clase de prueba son gratuitas.</p>
+                <summary>¿Cuánto cuesta la primera clase y el examen?</summary>
+                <p>La primera clase y el examen cuestan 30 Bs, y esto sirve para comenzar con una base clara y real sobre tu nivel.</p>
               </details>
               <details className="faq-item">
                 <summary>¿Para qué edades y niveles hay clases?</summary>
@@ -313,13 +338,16 @@ function App() {
             <p>Cuéntanos tu nivel, qué quieres aprender y qué horarios te sirven. Coordinaremos una evaluación y una clase de prueba gratuitas.</p>
             <div className="enrollment-promise">
               <span className="promise-icon"><MessageCircle size={18} /></span>
-              <span><strong>Empieza gratis</strong><small>Evaluación de nivel y clase de prueba.</small></span>
+              <span><strong>Primera clase + examen</strong><small>Valor de 30 Bs para iniciar con claridad.</small></span>
             </div>
             <div className="enrollment-arrow" aria-hidden="true"><ArrowDown size={28} /></div>
           </div>
           <form className="enrollment-form" onSubmit={handleSubmit}>
             <div className="form-heading">
               <div><span className="form-step">01 <span>— EMPECEMOS</span></span><h3>Tu inscripción</h3></div>
+              <a className="whatsapp-link" href="https://wa.me/59169776391" target="_blank" rel="noreferrer">
+                <MessageCircle size={18} /> +591 69776391
+              </a>
               <span className="form-sparkle"><Sparkles size={21} /></span>
             </div>
             <div className="form-row">

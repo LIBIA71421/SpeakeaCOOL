@@ -1,39 +1,213 @@
-import { initializeApp, type FirebaseApp } from "firebase/app";
-import { addDoc, collection, getFirestore, serverTimestamp } from "firebase/firestore";
+import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  type User,
+} from "firebase/auth";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
+import {
+  deleteObject,
+  getBytes,
+  getStorage,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
+import { getFirebaseApp } from "./firebaseApp";
 
-export type Enrollment = {
-  name: string;
+export type AccountProfile = {
+  uid: string;
+  displayName: string;
   email: string;
-  phone: string;
-  program: "ingles-conversacion" | "tutorias-escolares" | "ingles-personalizado";
-  modality: "online" | "presencial" | "flexible";
-  schedule: "manana" | "tarde" | "flexible";
-  message: string;
+  role: "student" | "teacher";
 };
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+export type StoredFile = {
+  id: string;
+  name: string;
+  ownerUid: string;
+  uploadedBy: string;
+  category: "teacher" | "student";
+  storagePath: string;
+  contentType: string;
+  createdAt: string;
 };
 
-let firebaseApp: FirebaseApp | undefined;
+export type StudentAccount = Pick<AccountProfile, "uid" | "displayName" | "email">;
 
-export async function saveEnrollment(enrollment: Enrollment): Promise<void> {
-  if (Object.values(firebaseConfig).some((value) => !value)) {
-    throw new Error(
-      "La conexión con Firebase aún no está configurada. Añade las credenciales en el archivo .env.",
-    );
+function getServices() {
+  const app = getFirebaseApp();
+  return {
+    auth: getAuth(app),
+    database: getFirestore(app),
+    storage: getStorage(app),
+  };
+}
+
+export async function registerStudent(
+  name: string,
+  email: string,
+  password: string,
+): Promise<User> {
+  const { auth, database } = getServices();
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(credential.user, { displayName: name });
+  await setDoc(doc(database, "users", credential.user.uid), {
+    displayName: name,
+    email,
+    role: "student",
+    createdAt: serverTimestamp(),
+  });
+  return credential.user;
+}
+
+export async function signInStudent(email: string, password: string): Promise<User> {
+  const { auth } = getServices();
+  return (await signInWithEmailAndPassword(auth, email, password)).user;
+}
+
+export async function signOutAccount(): Promise<void> {
+  const { auth } = getServices();
+  await signOut(auth);
+}
+
+export function subscribeToAuth(callback: (user: User | null) => void): () => void {
+  const { auth } = getServices();
+  return onAuthStateChanged(auth, callback);
+}
+
+export async function getAccountProfile(user: User): Promise<AccountProfile> {
+  const { database } = getServices();
+  const profileRef = doc(database, "users", user.uid);
+  const profileSnapshot = await getDoc(profileRef);
+
+  if (!profileSnapshot.exists()) {
+    await setDoc(profileRef, {
+      displayName: user.displayName ?? "",
+      email: user.email ?? "",
+      role: "student",
+      createdAt: serverTimestamp(),
+    });
+    return {
+      uid: user.uid,
+      displayName: user.displayName ?? "",
+      email: user.email ?? "",
+      role: "student",
+    };
   }
 
-  firebaseApp ??= initializeApp(firebaseConfig);
-  const database = getFirestore(firebaseApp);
-  await addDoc(collection(database, "enrollments"), {
-    ...enrollment,
-    createdAt: serverTimestamp(),
-    status: "new",
+  const data = profileSnapshot.data();
+  if (data.role !== "student" && data.role !== "teacher") {
+    throw new Error("La cuenta no tiene un rol válido. Contacta al tutor.");
+  }
+
+  return {
+    uid: user.uid,
+    displayName: typeof data.displayName === "string" ? data.displayName : user.displayName ?? "",
+    email: typeof data.email === "string" ? data.email : user.email ?? "",
+    role: data.role,
+  };
+}
+
+export async function listStoredFiles(profile: AccountProfile): Promise<StoredFile[]> {
+  const { database } = getServices();
+  const filesQuery =
+    profile.role === "teacher"
+      ? query(collection(database, "userFiles"), limit(100))
+      : query(
+          collection(database, "userFiles"),
+          where("ownerUid", "==", profile.uid),
+          limit(100),
+        );
+  const snapshot = await getDocs(filesQuery);
+
+  return Promise.all(
+    snapshot.docs.map(async (fileDocument) => {
+      const data = fileDocument.data();
+      const storagePath = String(data.storagePath);
+      return {
+        id: fileDocument.id,
+        name: String(data.name),
+        ownerUid: String(data.ownerUid),
+        uploadedBy: String(data.uploadedBy),
+        category: data.category === "teacher" ? "teacher" : "student",
+        storagePath,
+        contentType: String(data.contentType),
+        createdAt: data.createdAt?.toDate?.().toISOString?.() ?? "",
+      };
+    }),
+  );
+}
+
+export async function listStudentAccounts(): Promise<StudentAccount[]> {
+  const { database } = getServices();
+  const studentsQuery = query(
+    collection(database, "users"),
+    where("role", "==", "student"),
+    limit(100),
+  );
+  const snapshot = await getDocs(studentsQuery);
+  return snapshot.docs.map((student) => ({
+    uid: student.id,
+    displayName: String(student.data().displayName ?? ""),
+    email: String(student.data().email ?? ""),
+  }));
+}
+
+export async function uploadAccountFile(
+  file: File,
+  ownerUid: string,
+  uploadedBy: string,
+  category: StoredFile["category"],
+): Promise<void> {
+  const { database, storage } = getServices();
+  const safeName = file.name.replace(/[^\w.-]+/g, "_").slice(0, 120);
+  const storagePath = `files/${ownerUid}/${crypto.randomUUID()}-${safeName}`;
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, file, {
+    contentType: file.type || "application/octet-stream",
+    customMetadata: { uploadedBy },
   });
+
+  try {
+    await addDoc(collection(database, "userFiles"), {
+      ownerUid,
+      uploadedBy,
+      category,
+      name: file.name,
+      contentType: file.type || "application/octet-stream",
+      storagePath,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    await deleteObject(storageRef);
+    throw error;
+  }
+}
+
+export async function downloadAccountFile(file: StoredFile): Promise<Blob> {
+  const { storage } = getServices();
+  const bytes = await getBytes(ref(storage, file.storagePath));
+  return new Blob([bytes], { type: file.contentType });
+}
+
+export async function removeAccountFile(file: StoredFile): Promise<void> {
+  const { database, storage } = getServices();
+  await deleteObject(ref(storage, file.storagePath));
+  await deleteDoc(doc(database, "userFiles", file.id));
 }
