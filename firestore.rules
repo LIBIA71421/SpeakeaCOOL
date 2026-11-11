@@ -6,10 +6,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isTeacher() {
+    function isOwner() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
     }
 
     match /enrollments/{enrollmentId} {
@@ -63,8 +63,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if signedIn() && (request.auth.uid == userId || isTeacher());
-      allow list: if isTeacher();
+      allow get: if signedIn() && (request.auth.uid == userId || isOwner());
+      allow list: if isOwner();
       allow create: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.keys().hasAll(['displayName', 'email', 'role', 'createdAt'])
@@ -88,8 +88,10 @@ service cloud.firestore {
 
     match /userFiles/{fileId} {
       allow read: if signedIn()
-        && (resource.data.ownerUid == request.auth.uid || isTeacher());
-      allow create: if signedIn()
+        && (resource.data.ownerUid == request.auth.uid
+          || resource.data.category in ['owner', 'teacher']
+          || isOwner());
+      allow create: if isOwner()
         && request.resource.data.keys().hasAll([
           'ownerUid',
           'uploadedBy',
@@ -117,23 +119,48 @@ service cloud.firestore {
         && request.resource.data.storagePath.matches(
           '^files/' + request.resource.data.ownerUid + '/.+$'
         )
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.uploadedBy == request.auth.uid
+        && request.resource.data.category == 'owner'
         && request.resource.data.createdAt == request.time
-        && (
-          (isTeacher() && request.resource.data.category == 'teacher')
-          || (
-            request.resource.data.ownerUid == request.auth.uid
-            && request.resource.data.category == 'student'
-          )
-        );
+        && request.resource.data.contentType is string;
       allow update: if false;
-      allow delete: if signedIn()
-        && (
-          isTeacher()
-          || (
-            resource.data.ownerUid == request.auth.uid
-            && resource.data.uploadedBy == request.auth.uid
-          )
-        );
+      allow delete: if isOwner()
+        || (signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && resource.data.uploadedBy == request.auth.uid
+          && resource.data.category == 'student');
+    }
+
+    match /learningContent/{contentId} {
+      allow read: if signedIn() && (isOwner() || resource.data.published == true);
+      allow create: if isOwner()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.published is bool
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.level is string
+        && request.resource.data.goal is string
+        && request.resource.data.topics is list
+        && request.resource.data.exercises is list
+        && request.resource.data.answerKey is list
+        && request.resource.data.exercises.size() == request.resource.data.answerKey.size()
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.published is bool
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.level is string
+        && request.resource.data.goal is string
+        && request.resource.data.topics is list
+        && request.resource.data.exercises is list
+        && request.resource.data.answerKey is list
+        && request.resource.data.exercises.size() == request.resource.data.answerKey.size();
+      allow delete: if isOwner() && resource.data.ownerUid == request.auth.uid;
     }
   }
 }

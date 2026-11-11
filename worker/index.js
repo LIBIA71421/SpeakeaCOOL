@@ -130,7 +130,19 @@ class FirebaseStudyRepository {
     const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`;
     const response = await fetch(url, { headers: this.authHeaders() });
     if (response.status === 404) throw new HttpError(403, "No se encontró el perfil de esta cuenta.");
-    if (!response.ok) throw new HttpError(502, "No se pudo consultar el perfil en Firestore.");
+    if (!response.ok) {
+      const details = await response.json().catch(() => null);
+      const code = details?.error?.status || "UNKNOWN";
+      const message = details?.error?.message || "sin detalle";
+      console.error("Firestore profile read failed:", response.status, code, message);
+      if (response.status === 403) {
+        throw new HttpError(502, "Firestore rechazó la lectura de tu perfil (403). Comprueba que las reglas publicadas permiten leer users/{uid}.");
+      }
+      if (response.status === 401) {
+        throw new HttpError(502, "Firebase rechazó la sesión al consultar el perfil (401). Cierra sesión y vuelve a entrar.");
+      }
+      throw new HttpError(502, `Firestore no pudo consultar el perfil (HTTP ${response.status}, ${code}).`);
+    }
     const document = await response.json();
     return {
       role: document.fields?.role?.stringValue,
@@ -139,10 +151,16 @@ class FirebaseStudyRepository {
   }
 
   async listFiles(uid, role) {
-    const filters = [{ fieldPath: "ownerUid", op: "EQUAL", value: { stringValue: uid } }];
-    if (role === "teacher") {
-      filters.push({ fieldPath: "uploadedBy", op: "EQUAL", value: { stringValue: uid } });
-    }
+    const filters = role === "owner"
+      ? [null]
+      : [
+          {
+            fieldPath: "category",
+            op: "IN",
+            value: { arrayValue: { values: [{ stringValue: "owner" }, { stringValue: "teacher" }] } },
+          },
+          { fieldPath: "ownerUid", op: "EQUAL", value: { stringValue: uid } },
+        ];
 
     const documents = new Map();
     for (const filter of filters) {
@@ -154,7 +172,7 @@ class FirebaseStudyRepository {
           body: JSON.stringify({
             structuredQuery: {
               from: [{ collectionId: "userFiles" }],
-              where: { fieldFilter: filter },
+              ...(filter ? { where: { fieldFilter: filter } } : {}),
               limit: MAX_DOCUMENTS,
             },
           }),
@@ -171,7 +189,53 @@ class FirebaseStudyRepository {
         documents.set(id, this.mapFile(document, id));
       }
     }
-    return [...documents.values()];
+    return [...documents.values()].slice(0, MAX_DOCUMENTS);
+  }
+
+  async listPublishedLearningContent() {
+    const response = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents:runQuery`,
+      {
+        method: "POST",
+        headers: { ...this.authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: "learningContent" }],
+            where: {
+              fieldFilter: {
+                fieldPath: "published",
+                op: "EQUAL",
+                value: { booleanValue: true },
+              },
+            },
+            limit: MAX_DOCUMENTS,
+          },
+        }),
+      },
+    );
+    if (!response.ok) {
+      throw new HttpError(502, "No se pudieron consultar los materiales publicados por el tutor.");
+    }
+    return (await response.json())
+      .filter((result) => result.document)
+      .map((result) => {
+        const fields = result.document.fields || {};
+        const value = (key) => fields[key]?.stringValue || "";
+        const topics = fields.topics?.arrayValue?.values?.map((item) => item.stringValue || "") || [];
+        return {
+          name: value("title") || "Material del tutor",
+          text: [
+            value("level"),
+            value("goal"),
+            value("focus"),
+            value("instructions"),
+            topics.join(", "),
+            ...(fields.exercises?.arrayValue?.values?.map((item) => item.stringValue || "") || []),
+            ...(fields.answerKey?.arrayValue?.values?.map((item) => item.stringValue || "") || []),
+            value("speakingPrompt"),
+          ].filter(Boolean).join("\n"),
+        };
+      });
   }
 
   mapFile(document, id) {
@@ -181,6 +245,7 @@ class FirebaseStudyRepository {
       name: fields.name?.stringValue || "Documento sin nombre",
       ownerUid: fields.ownerUid?.stringValue || "",
       uploadedBy: fields.uploadedBy?.stringValue || "",
+      category: fields.category?.stringValue || "student",
       storagePath: fields.storagePath?.stringValue || "",
       contentType: fields.contentType?.stringValue || "",
     };
@@ -241,11 +306,17 @@ class StudyMaterialRetriever {
   }
 
   async retrieve(question, files, repository) {
-    const fileContexts = await Promise.all(
-      files.map(async (file) => ({ file, ...(await repository.readFile(file)) })),
-    );
+    const [fileContexts, publishedContent] = await Promise.all([
+      Promise.all(
+        files.map(async (file) => ({ file, ...(await repository.readFile(file)) })),
+      ),
+      repository.listPublishedLearningContent(),
+    ]);
     const queryTerms = this.tokenize(question);
-    const rankedMaterials = studyMaterials
+    const rankedMaterials = [
+      ...studyMaterials,
+      ...publishedContent.map((material, index) => ({ id: `teaching-${index}`, ...material })),
+    ]
       .map((material) => {
         const terms = new Set(this.tokenize(material.text));
         const score = queryTerms.reduce((total, term) => total + Number(terms.has(term)), 0);
@@ -395,7 +466,7 @@ class StudyChatService {
       match[1],
     );
     const profile = await repository.getProfile(identity.uid);
-    if (profile.role !== "student" && profile.role !== "teacher") {
+    if (profile.role !== "student" && profile.role !== "owner") {
       throw new HttpError(403, "Tu cuenta no tiene acceso al asistente.");
     }
 

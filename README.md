@@ -11,7 +11,7 @@ Plataforma de tutorías de inglés creada con React, TypeScript, Vite y Firebase
 5. Despliega el asistente gratuito de Cloudflare Workers desde `worker/`; instrucciones abajo.
 6. Ejecuta `npm run dev`.
 
-Las variables `VITE_FIREBASE_*` son configuración pública del cliente, no secretos. Las reglas autorizan a estudiantes a leer sus propios archivos y al tutor a gestionar el material. Un ********usuario nuevo solo puede crear un perfil con rol `student`; para habilitar la cuenta del tutor, crea primero su cuenta desde la interfaz y cambia `users/{uid}.role` a `teacher` en Firebase Console. No habilites al tutor permitiendo que una persona cambie su propio rol desde el cliente.
+Las variables `VITE_FIREBASE_*` son configuración pública del cliente, no secretos. Toda cuenta nueva se crea como `student`; para habilitar el panel de tutoría, el propietario del proyecto debe crear/iniciar sesión con su cuenta y cambiar manualmente `users/{uid}.role` a `owner` en Firebase Console. Las reglas impiden que una cuenta se otorgue ese rol desde la web. El rol `owner` es un permiso de la aplicación configurado por una persona con acceso administrativo a Firebase; Firebase Rules no comprueban automáticamente el rol IAM de Google Cloud.
 
 ## Videollamadas
 
@@ -19,7 +19,9 @@ El Meet Room integra Jitsi Meet en una página propia. La videollamada y la opci
 
 ## Archivos y asistente de estudio
 
-Los archivos se guardan en Firebase Storage, con registros privados en Firestore y descargas autenticadas por Firebase SDK (no se exponen enlaces públicos de descarga). Se aceptan PDF, Word, texto e imágenes de hasta 20 MB. Configura CORS en el bucket de Cloud Storage para permitir el origen donde publiques la app y `http://localhost:5173` durante el desarrollo; sin ello, el SDK del navegador no podrá transferir archivos.
+Solo el perfil `owner` puede cargar materiales, y las reglas de Firestore y Storage también verifican ese rol. Estudiantes autenticados pueden consultar materiales publicados dentro del aula. La interfaz no ofrece descarga ni impresión y muestra PDF, DOCX, texto e imágenes compatibles. La aplicación web no puede impedir capturas del sistema, fotografías de pantalla, herramientas de desarrollo u otras copias desde el dispositivo; el visor y su marca de agua son solo disuasorios. Configura CORS en el bucket para el origen publicado y `http://localhost:5173` durante el desarrollo.
+
+El panel `GESTIONAR AULA` permite crear, editar, publicar o eliminar rutas y prácticas. Los ejercicios y sus respuestas se almacenan en Firestore; los estudiantes pueden completarlos y ver la clave después de revisar sus respuestas. Despliega las reglas con `firebase deploy --only firestore:rules,storage` antes de usarlo.
 
 ## Backend gratuito del asistente
 
@@ -35,7 +37,7 @@ El Worker valida criptográficamente los ID tokens de Firebase, aplica los permi
 
 La personalidad está diseñada como grosera y divertida sin dirigir insultos ni humillar al estudiante. El Worker aplica un límite básico por instancia y los proveedores gratuitos pueden cambiar sus límites, disponibilidad o condiciones; comprueba el panel de uso de Cloudflare y Google AI Studio.
 
-La configuración web de Firebase en `src/firebaseApp.ts` es pública, no es credencial de administrador; la seguridad depende de las reglas Firestore/Storage. Activa Email/Password en Firebase Authentication. Para que el tutor tenga permisos, crea su cuenta de estudiante y luego cambia `users/{uid}.role` a `teacher` en Firebase Console.
+La configuración web de Firebase en `src/firebaseApp.ts` es pública, no es credencial de administrador; la seguridad depende de las reglas Firestore/Storage. Activa Email/Password en Firebase Authentication. Para habilitar al tutor, crea/inicia sesión con su cuenta, localiza su UID en Authentication y cambia `users/{uid}.role` a `owner` en Firebase Console.
 
 ## Publicación
 

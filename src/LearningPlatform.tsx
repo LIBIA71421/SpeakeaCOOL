@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -6,12 +6,12 @@ import {
   Check,
   ChevronRight,
   Clipboard,
+  Eye,
   FileText,
   FolderOpen,
   LogOut,
   MessageCircle,
   MonitorUp,
-  Printer,
   Send,
   Square,
   Upload,
@@ -22,6 +22,8 @@ import { SpeechService, StudyAssistantClient } from "./assistant";
 import {
   getAccountProfile,
   downloadAccountFile,
+  deleteLearningContent,
+  listLearningContent,
   listStoredFiles,
   listStudentAccounts,
   registerStudent,
@@ -29,12 +31,13 @@ import {
   signInStudent,
   signOutAccount,
   subscribeToAuth,
+  saveLearningContent,
   uploadAccountFile,
   type AccountProfile,
+  type LearningContent,
   type StoredFile,
   type StudentAccount,
 } from "./firebase";
-import { practiceSheets, studyUnits } from "./studyMaterials";
 
 type Props = { onExit: () => void };
 type Section = "home" | "materials" | "room" | "library" | "assistant";
@@ -42,7 +45,7 @@ type Section = "home" | "materials" | "room" | "library" | "assistant";
 const assistantEndpoint =
   (import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined) ||
   "https://speakeacool-study-assistant.speakeacool.workers.dev";
-const allowedFileTypes = ".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg";
+const allowedFileTypes = ".pdf,.docx,.txt,.png,.jpg,.jpeg";
 const speechService = new SpeechService();
 
 function getErrorMessage(error: unknown): string {
@@ -243,11 +246,11 @@ function PortalDashboard({
   onSignedOut: () => void;
 }) {
   const [files, setFiles] = useState<StoredFile[]>([]);
+  const [learningContent, setLearningContent] = useState<LearningContent[]>([]);
   const [students, setStudents] = useState<StudentAccount[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
   const [resourceError, setResourceError] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [uploadOwner, setUploadOwner] = useState("self");
   const [uploadMessage, setUploadMessage] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [roomActive, setRoomActive] = useState(false);
@@ -257,17 +260,20 @@ function PortalDashboard({
   const [answerSources, setAnswerSources] = useState<string[]>([]);
   const [assistantError, setAssistantError] = useState("");
   const [asking, setAsking] = useState(false);
+  const [preview, setPreview] = useState<{ file: StoredFile; blob: Blob } | null>(null);
 
   async function refreshResources() {
     setResourcesLoading(true);
     setResourceError("");
     try {
-      const [nextFiles, nextStudents] = await Promise.all([
+      const [nextFiles, nextStudents, nextContent] = await Promise.all([
         listStoredFiles(profile),
-        profile.role === "teacher" ? listStudentAccounts() : Promise.resolve([]),
+        profile.role === "owner" ? listStudentAccounts() : Promise.resolve([]),
+        listLearningContent(profile),
       ]);
       setFiles(nextFiles);
       setStudents(nextStudents);
+      setLearningContent(nextContent);
     } catch (error) {
       setResourceError(getErrorMessage(error));
     } finally {
@@ -292,17 +298,10 @@ function PortalDashboard({
       setUploadMessage("El archivo supera el límite de 20 MB.");
       return;
     }
-    const ownerUid =
-      profile.role === "teacher" && uploadOwner !== "self" ? uploadOwner : profile.uid;
     setUploading(true);
     setUploadMessage("");
     try {
-      await uploadAccountFile(
-        file,
-        ownerUid,
-        user.uid,
-        profile.role === "teacher" ? "teacher" : "student",
-      );
+      await uploadAccountFile(file, profile.uid, user.uid);
       formElement.reset();
       await refreshResources();
       setUploadMessage("ARCHIVO GUARDADO EN EL ALMACÉN.");
@@ -323,16 +322,30 @@ function PortalDashboard({
     }
   }
 
-  async function downloadFile(file: StoredFile) {
+  async function previewFile(file: StoredFile) {
     setResourceError("");
     try {
-      const contents = await downloadAccountFile(file);
-      const url = URL.createObjectURL(contents);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = file.name;
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setPreview({ file, blob: await downloadAccountFile(file) });
+    } catch (error) {
+      setResourceError(getErrorMessage(error));
+    }
+  }
+
+  async function saveContent(content: Omit<LearningContent, "id" | "ownerUid">, id?: string) {
+    try {
+      await saveLearningContent(profile, content, id);
+      await refreshResources();
+    } catch (error) {
+      setResourceError(getErrorMessage(error));
+      throw error;
+    }
+  }
+
+  async function deleteContent(content: LearningContent) {
+    if (!window.confirm(`¿Eliminar "${content.title}"?`)) return;
+    try {
+      await deleteLearningContent(profile, content.id);
+      await refreshResources();
     } catch (error) {
       setResourceError(getErrorMessage(error));
     }
@@ -353,7 +366,7 @@ function PortalDashboard({
         user,
         question.trim(),
         files
-          .filter((file) => profile.role !== "teacher" || file.ownerUid === profile.uid)
+          .filter((file) => profile.role !== "owner" || file.ownerUid === profile.uid)
           .map((file) => file.id),
       );
       setAnswer(result.answer);
@@ -367,7 +380,7 @@ function PortalDashboard({
 
   const navItems: { id: Section; label: string; icon: typeof BookOpen }[] = [
     { id: "home", label: "INICIO", icon: Clipboard },
-    { id: "materials", label: "MATERIALES", icon: BookOpen },
+    { id: "materials", label: profile.role === "owner" ? "GESTIONAR AULA" : "MATERIALES", icon: BookOpen },
     { id: "room", label: "MEET ROOM", icon: Video },
     { id: "library", label: "ALMACÉN", icon: FolderOpen },
     { id: "assistant", label: "ASISTENTE RAG", icon: MessageCircle },
@@ -392,7 +405,7 @@ function PortalDashboard({
           ))}
         </nav>
         <div className="portal-sidebar-bottom">
-          <span className="role-tag">{profile.role === "teacher" ? "TUTOR" : "ESTUDIANTE"}</span>
+          <span className="role-tag">{profile.role === "owner" ? "PROPIETARIO / TUTOR" : "ESTUDIANTE"}</span>
           <strong>{profile.displayName || profile.email}</strong>
           <button
             className="sidebar-logout"
@@ -417,10 +430,19 @@ function PortalDashboard({
           <HomeSection
             profile={profile}
             fileCount={files.length}
+            unitCount={learningContent.length}
             onNavigate={onSectionChange}
           />
         )}
-        {section === "materials" && <MaterialsSection />}
+        {section === "materials" && (
+          <MaterialsSection
+            profile={profile}
+            contents={learningContent}
+            loading={resourcesLoading}
+            onSave={saveContent}
+            onDelete={(content) => void deleteContent(content)}
+          />
+        )}
         {section === "room" && (
           <RoomSection
             roomCode={roomCode}
@@ -452,14 +474,11 @@ function PortalDashboard({
             files={files}
             students={students}
             loading={resourcesLoading}
-            uploadOwner={uploadOwner}
             uploadMessage={uploadMessage}
             uploading={uploading}
-            onUploadOwnerChange={setUploadOwner}
             onUpload={submitUpload}
-            onDownload={(file) => void downloadFile(file)}
+            onPreview={(file) => void previewFile(file)}
             onDelete={(file) => void deleteFile(file)}
-            currentUid={user.uid}
           />
         )}
         {section === "assistant" && (
@@ -477,6 +496,13 @@ function PortalDashboard({
             speechAvailable={speechService.available}
           />
         )}
+        {preview && (
+          <FilePreview
+            file={preview.file}
+            blob={preview.blob}
+            onClose={() => setPreview(null)}
+          />
+        )}
       </main>
     </div>
   );
@@ -485,10 +511,12 @@ function PortalDashboard({
 function HomeSection({
   profile,
   fileCount,
+  unitCount,
   onNavigate,
 }: {
   profile: AccountProfile;
   fileCount: number;
+  unitCount: number;
   onNavigate: (section: Section) => void;
 }) {
   return (
@@ -496,12 +524,12 @@ function HomeSection({
       <p className="brutal-eyebrow">EDUCACIÓN EN MOVIMIENTO · 01</p>
       <h1 className="portal-title">QUÉ BUENO<br />TENERTE <span>AQUÍ.</span></h1>
       <p className="portal-intro">
-        {profile.role === "teacher"
-          ? "Tu espacio de tutoría está listo. Comparte recursos, abre una sala y acompaña cada avance."
+        {profile.role === "owner"
+          ? "Tu panel de tutoría está listo. Crea prácticas, comparte recursos, abre una sala y acompaña cada avance."
           : "Tu espacio está listo. Explora el material, guarda tus archivos y avanza paso a paso."}
       </p>
       <div className="portal-stats">
-        <div><strong>03</strong><span>RUTAS DE AVANCE</span></div>
+        <div><strong>{unitCount.toString().padStart(2, "0")}</strong><span>RUTAS DE AVANCE</span></div>
         <div><strong>{fileCount.toString().padStart(2, "0")}</strong><span>ARCHIVOS EN TU ALMACÉN</span></div>
         <div><strong>01:1</strong><span>APRENDIZAJE PERSONAL</span></div>
       </div>
@@ -525,35 +553,94 @@ function HomeSection({
   );
 }
 
-function MaterialsSection() {
+function MaterialsSection({
+  profile,
+  contents,
+  loading,
+  onSave,
+  onDelete,
+}: {
+  profile: AccountProfile;
+  contents: LearningContent[];
+  loading: boolean;
+  onSave: (content: Omit<LearningContent, "id" | "ownerUid">, id?: string) => Promise<void>;
+  onDelete: (content: LearningContent) => void;
+}) {
   const [openPractice, setOpenPractice] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState<LearningContent | null>(null);
   return (
     <section className="portal-content">
       <p className="brutal-eyebrow">RUTAS DE APRENDIZAJE · 02</p>
       <h1 className="portal-title">ESTUDIA.<br /><span>PRACTICA.</span></h1>
-      <p className="portal-intro">Temas y hojas de práctica originales para avanzar del nivel inicial al intermedio. El tutor ajusta la ruta a cada persona.</p>
+      <p className="portal-intro">
+        {profile.role === "owner"
+          ? "Crea las rutas y prácticas de tu clase. Solo el propietario del aula puede publicar o modificar su contenido."
+          : "Consulta las rutas publicadas por tu tutor y practica aquí mismo, sin descargar ni imprimir hojas."}
+      </p>
+      {profile.role === "owner" && (
+        <div className="teacher-content-actions">
+          <button
+            className="brutal-button button-acid"
+            onClick={() => setEditingContent(editingContent ? null : emptyLearningContent())}
+            type="button"
+          >
+            {editingContent ? "CERRAR EDITOR" : "CREAR MATERIAL"} <ArrowUpRight size={17} />
+          </button>
+        </div>
+      )}
+      {profile.role === "owner" && editingContent && (
+        <LearningContentEditor
+          key={editingContent.id || "new"}
+          content={editingContent}
+          onCancel={() => setEditingContent(null)}
+          onSave={async (content) => {
+            await onSave(content, editingContent.id || undefined);
+            setEditingContent(null);
+          }}
+        />
+      )}
+      {loading ? <p className="empty-library">CARGANDO MATERIALES…</p> : contents.length === 0 ? (
+        <p className="empty-library">
+          {profile.role === "owner"
+            ? "AÚN NO HAY MATERIALES. CREA UNA RUTA PARA TU CLASE."
+            : "AÚN NO HAY MATERIALES PUBLICADOS POR TU TUTOR."}
+        </p>
+      ) : (
       <div className="unit-grid">
-        {studyUnits.map((unit, index) => (
+        {contents.map((unit, index) => (
           <article className="unit-card" key={unit.id}>
             <span className="unit-level">{unit.level}</span>
-            <span className="unit-index">0{index + 1}</span>
+            <span className="unit-index">{String(index + 1).padStart(2, "0")}</span>
             <h2>{unit.title}</h2>
             <p>{unit.goal}</p>
             <ul>{unit.topics.map((topic) => <li key={topic}><Check size={14} /> {topic}</li>)}</ul>
+            {profile.role === "owner" && (
+              <span className={unit.published ? "content-state published" : "content-state"}>
+                {unit.published ? "PUBLICADO" : "BORRADOR"}
+              </span>
+            )}
             <button
               className="unit-open"
-              onClick={() => setOpenPractice(openPractice === unit.practiceId ? null : unit.practiceId)}
+              onClick={() => setOpenPractice(openPractice === unit.id ? null : unit.id)}
               type="button"
             >
-              {openPractice === unit.practiceId ? "CERRAR PRÁCTICA" : "ABRIR HOJA DE PRÁCTICA"}
+              {openPractice === unit.id ? "CERRAR PRÁCTICA" : "ABRIR PRÁCTICA"}
               <ArrowUpRight size={16} />
             </button>
+            {profile.role === "owner" && (
+              <div className="content-card-actions">
+                <button onClick={() => setEditingContent(unit)} type="button">EDITAR</button>
+                <button onClick={() => onDelete(unit)} type="button">ELIMINAR</button>
+              </div>
+            )}
           </article>
         ))}
       </div>
-      {openPractice && (
+      )}
+      {openPractice && contents.some((practice) => practice.id === openPractice) && (
         <PracticeSheetView
-          practice={practiceSheets.find((practice) => practice.id === openPractice)!}
+          key={openPractice}
+          practice={contents.find((practice) => practice.id === openPractice)!}
           onClose={() => setOpenPractice(null)}
         />
       )}
@@ -562,30 +649,140 @@ function MaterialsSection() {
   );
 }
 
+function emptyLearningContent(): LearningContent {
+  return {
+    id: "",
+    level: "",
+    title: "",
+    goal: "",
+    topics: [],
+    focus: "",
+    instructions: "",
+    exercises: [],
+    answerKey: [],
+    speakingPrompt: "",
+    published: false,
+    ownerUid: "",
+  };
+}
+
+function LearningContentEditor({
+  content,
+  onCancel,
+  onSave,
+}: {
+  content: LearningContent;
+  onCancel: () => void;
+  onSave: (content: Omit<LearningContent, "id" | "ownerUid">) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const exercises = String(form.get("exercises") || "").split("\n").map((line) => line.trim()).filter(Boolean);
+    const answerKey = String(form.get("answerKey") || "").split("\n").map((line) => line.trim()).filter(Boolean);
+    if (exercises.length === 0 || exercises.length !== answerKey.length) {
+      setError("Cada ejercicio debe tener una respuesta en la misma posición. Separa alternativas con |.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      await onSave({
+        level: String(form.get("level") || "").trim(),
+        title: String(form.get("title") || "").trim(),
+        goal: String(form.get("goal") || "").trim(),
+        topics: String(form.get("topics") || "").split("\n").map((line) => line.trim()).filter(Boolean),
+        focus: String(form.get("focus") || "").trim(),
+        instructions: String(form.get("instructions") || "").trim(),
+        exercises,
+        answerKey,
+        speakingPrompt: String(form.get("speakingPrompt") || "").trim(),
+        published: form.get("published") === "on",
+      });
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="learning-editor" onSubmit={(event) => void submit(event)}>
+      <h2>{content.id ? "EDITAR RUTA" : "NUEVA RUTA Y PRÁCTICA"}</h2>
+      <div className="editor-fields">
+        <label><span>NIVEL</span><input defaultValue={content.level} maxLength={40} name="level" required /></label>
+        <label><span>TÍTULO</span><input defaultValue={content.title} maxLength={120} name="title" required /></label>
+        <label className="editor-wide"><span>OBJETIVO</span><textarea defaultValue={content.goal} maxLength={500} name="goal" required rows={2} /></label>
+        <label><span>ENFOQUE</span><input defaultValue={content.focus} maxLength={120} name="focus" required /></label>
+        <label><span>INSTRUCCIONES</span><input defaultValue={content.instructions} maxLength={500} name="instructions" required /></label>
+        <label><span>TEMAS · UNO POR LÍNEA</span><textarea defaultValue={content.topics.join("\n")} name="topics" required rows={4} /></label>
+        <label><span>EJERCICIOS · UNO POR LÍNEA</span><textarea defaultValue={content.exercises.join("\n")} name="exercises" required rows={5} /></label>
+        <label><span>RESPUESTAS · MISMO ORDEN, | PARA ALTERNATIVAS</span><textarea defaultValue={content.answerKey.join("\n")} name="answerKey" required rows={5} /></label>
+        <label className="editor-wide"><span>CONSIGNA PARA HABLAR</span><textarea defaultValue={content.speakingPrompt} maxLength={500} name="speakingPrompt" required rows={2} /></label>
+      </div>
+      <label className="publish-toggle"><input defaultChecked={content.published} name="published" type="checkbox" /> PUBLICAR PARA ESTUDIANTES</label>
+      {error && <p className="portal-feedback error" role="alert">{error}</p>}
+      <div className="editor-actions">
+        <button className="brutal-button button-acid" disabled={busy} type="submit">{busy ? "GUARDANDO…" : "GUARDAR RUTA"}</button>
+        <button className="brutal-button button-light" onClick={onCancel} type="button">CANCELAR</button>
+      </div>
+    </form>
+  );
+}
+
 function PracticeSheetView({
   practice,
   onClose,
 }: {
-  practice: (typeof practiceSheets)[number];
+  practice: LearningContent;
   onClose: () => void;
 }) {
+  const [answers, setAnswers] = useState<string[]>(() => practice.exercises.map(() => ""));
+  const [checked, setChecked] = useState(false);
+  const normalize = (answer: string) => answer.trim().toLowerCase().replace(/[.,!?]/g, "").replace(/\s+/g, " ");
+  const correctAnswers = answers.filter((answer, index) =>
+    practice.answerKey[index]
+      .split("|")
+      .some((candidate) => normalize(candidate) === normalize(answer)),
+  ).length;
+
   return (
     <article className="practice-sheet">
       <div className="practice-heading">
         <div><span className="unit-level">{practice.level} / HOJA DE PRÁCTICA</span><h2>{practice.title}</h2></div>
         <div className="practice-actions">
-          <button className="brutal-button button-light" onClick={() => window.print()} type="button"><Printer size={15} /> IMPRIMIR</button>
           <button className="close-practice" onClick={onClose} type="button">CERRAR ×</button>
         </div>
       </div>
       <p className="practice-focus">ENFOQUE: {practice.focus}</p>
       <p>{practice.instructions}</p>
-      <ol className="exercise-list">{practice.exercises.map((exercise) => <li key={exercise}>{exercise}<span className="writing-line" /></li>)}</ol>
+      <ol className="exercise-list">{practice.exercises.map((exercise, index) => (
+        <li key={`${index}-${exercise}`}>
+          <label>
+            <span>{exercise}</span>
+            <input
+              aria-label={`Respuesta al ejercicio ${index + 1}`}
+              autoComplete="off"
+              onChange={(event) => {
+                setAnswers((current) => current.map((answer, answerIndex) => answerIndex === index ? event.target.value : answer));
+                setChecked(false);
+              }}
+              value={answers[index]}
+            />
+          </label>
+        </li>
+      ))}</ol>
+      <button className="brutal-button button-acid" onClick={() => setChecked(true)} type="button">REVISAR RESPUESTAS <Check size={16} /></button>
+      {checked && <p className="practice-result" role="status">RESULTADO: {correctAnswers} / {practice.exercises.length} · {correctAnswers === practice.exercises.length ? "PERFECTO, THAT'S THE ONE." : "REVISA Y VUELVE A INTENTAR."}</p>}
       <div className="speaking-box"><strong>HABLEMOS</strong><p>{practice.speakingPrompt}</p></div>
-      <details className="answer-key">
+      {checked && <details className="answer-key">
         <summary>VER CLAVE DE RESPUESTAS</summary>
         <ol>{practice.answerKey.map((answer) => <li key={answer}>{answer}</li>)}</ol>
-      </details>
+      </details>}
     </article>
   );
 }
@@ -665,54 +862,39 @@ function LibrarySection({
   files,
   students,
   loading,
-  uploadOwner,
   uploadMessage,
   uploading,
-  onUploadOwnerChange,
   onUpload,
-  onDownload,
+  onPreview,
   onDelete,
-  currentUid,
 }: {
   profile: AccountProfile;
   files: StoredFile[];
   students: StudentAccount[];
   loading: boolean;
-  uploadOwner: string;
   uploadMessage: string;
   uploading: boolean;
-  onUploadOwnerChange: (uid: string) => void;
   onUpload: (event: FormEvent<HTMLFormElement>) => void;
-  onDownload: (file: StoredFile) => void;
+  onPreview: (file: StoredFile) => void;
   onDelete: (file: StoredFile) => void;
-  currentUid: string;
 }) {
   return (
     <section className="portal-content">
       <p className="brutal-eyebrow">ARCHIVOS PRIVADOS · 04</p>
       <h1 className="portal-title">GUARDA.<br /><span>ENCUENTRA.</span></h1>
       <p className="portal-intro">
-        {profile.role === "teacher"
-          ? "Tus notas y documentos, o material que quieras dejar en el almacén de un estudiante."
-          : "Tus archivos de estudio y los documentos que tu tutor comparta contigo."}
+        {profile.role === "owner"
+          ? "Sube material de clase para que tus estudiantes lo consulten aquí. Solo el propietario puede cargar archivos."
+          : "Consulta aquí los documentos que tu tutor comparta. El aula no ofrece botones para descargar ni imprimir."}
       </p>
-      <form className="file-upload" onSubmit={(event) => void onUpload(event)}>
-        <div className="upload-title"><Upload size={19} /><strong>SUBIR DOCUMENTO</strong><span>PDF, Word, texto o imagen · hasta 20 MB</span></div>
-        {profile.role === "teacher" && (
-          <label className="upload-target">
-            <span>GUARDAR EN</span>
-            <select onChange={(event) => onUploadOwnerChange(event.target.value)} value={uploadOwner}>
-              <option value="self">Mi almacén de tutor</option>
-              {students.map((student) => <option key={student.uid} value={student.uid}>{student.displayName || student.email}</option>)}
-            </select>
-          </label>
-        )}
+      {profile.role === "owner" && <form className="file-upload" onSubmit={(event) => void onUpload(event)}>
+        <div className="upload-title"><Upload size={19} /><strong>SUBIR DOCUMENTO</strong><span>PDF, DOCX, texto o imagen · hasta 20 MB</span></div>
         <input accept={allowedFileTypes} name="file" required type="file" />
         <button className="brutal-button button-acid" disabled={uploading} type="submit">
-          {uploading ? "SUBIENDO…" : "SUBIR A MI ALMACÉN"} <ArrowUpRight size={17} />
+          {uploading ? "SUBIENDO…" : "PUBLICAR EN EL ALMACÉN"} <ArrowUpRight size={17} />
         </button>
         {uploadMessage && <p className={uploadMessage.startsWith("ARCHIVO") ? "portal-feedback success" : "portal-feedback error"} role="status">{uploadMessage}</p>}
-      </form>
+      </form>}
       <div className="library-heading"><h2>DOCUMENTOS</h2><span>{files.length.toString().padStart(2, "0")} ARCHIVOS · LÍMITE 100</span></div>
       {loading ? <p className="empty-library">CARGANDO ARCHIVOS…</p> : files.length === 0 ? (
         <p className="empty-library">AÚN NO HAY ARCHIVOS. AL SUBIR UNO, APARECERÁ AQUÍ.</p>
@@ -720,20 +902,107 @@ function LibrarySection({
         <div className="file-list">
           {files.map((file) => {
             const ownerName = students.find((student) => student.uid === file.ownerUid)?.displayName;
-            const canDelete = profile.role === "teacher" || file.uploadedBy === currentUid;
+            const canDelete = profile.role === "owner"
+              || (file.category === "student" && file.ownerUid === profile.uid);
             return (
               <article className="file-row" key={file.id}>
                 <FileText size={21} />
-                <div><strong>{file.name}</strong><span>{file.category === "teacher" ? "MATERIAL DEL TUTOR" : "ARCHIVO DE ESTUDIO"}{profile.role === "teacher" && ownerName ? ` · ${ownerName}` : ""}</span></div>
-                <button className="file-action" onClick={() => onDownload(file)} type="button">DESCARGAR <ArrowUpRight size={15} /></button>
+                <div><strong>{file.name}</strong><span>{file.category === "student" ? "ARCHIVO PROPIO" : "MATERIAL DEL TUTOR"}{profile.role === "owner" && ownerName ? ` · ${ownerName}` : ""}</span></div>
+                <button className="file-action" onClick={() => onPreview(file)} type="button"><Eye size={15} /> VER EN EL AULA</button>
                 {canDelete && <button aria-label={`Eliminar ${file.name}`} className="file-delete" onClick={() => onDelete(file)} type="button">ELIMINAR</button>}
               </article>
             );
           })}
         </div>
       )}
-      <p className="storage-note">Los archivos se guardan en Firebase Storage con acceso limitado a su propietario y al tutor. Los enlaces descargables no deben publicarse.</p>
+      <p className="storage-note">Los archivos requieren iniciar sesión y se muestran dentro del aula. La web no puede impedir capturas de pantalla, fotografías externas ni otras copias realizadas desde el dispositivo.</p>
     </section>
+  );
+}
+
+function FilePreview({
+  file,
+  blob,
+  onClose,
+}: {
+  file: StoredFile;
+  blob: Blob;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [text, setText] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const documentContainer = useRef<HTMLDivElement>(null);
+  const styleContainer = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    setPreviewError("");
+    setText("");
+    setUrl("");
+    if (file.contentType === "text/plain") {
+      void blob.text()
+        .then((value) => { if (active) setText(value); })
+        .catch((error: unknown) => { if (active) setPreviewError(getErrorMessage(error)); });
+    } else if (file.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      const body = documentContainer.current;
+      const styles = styleContainer.current;
+      if (!body || !styles) return;
+      body.replaceChildren();
+      styles.replaceChildren();
+      setPreviewLoading(true);
+      void import("docx-preview")
+        .then(({ renderAsync }) => active ? renderAsync(blob, body, styles) : undefined)
+        .catch((error: unknown) => { if (active) setPreviewError(getErrorMessage(error)); })
+        .finally(() => { if (active) setPreviewLoading(false); });
+      return () => {
+        active = false;
+        body.replaceChildren();
+        styles.replaceChildren();
+      };
+    } else if (file.contentType.startsWith("image/") || file.contentType === "application/pdf") {
+      const objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+      return () => {
+        active = false;
+        URL.revokeObjectURL(objectUrl);
+      };
+    } else {
+      setPreviewError("Este formato no tiene vista previa integrada. Pide al tutor que lo comparta como PDF.");
+    }
+    return () => { active = false; };
+  }, [blob, file.contentType]);
+
+  return (
+    <div className="file-preview-backdrop" role="presentation" onClick={onClose}>
+      <section
+        aria-label={`Vista previa de ${file.name}`}
+        aria-modal="true"
+        className="file-preview-dialog"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header><strong>{file.name}</strong><button className="close-practice" onClick={onClose} type="button">CERRAR ×</button></header>
+        <div className="file-preview-content">
+          {previewError ? <p role="alert">{previewError}</p> : null}
+          {url && file.contentType === "application/pdf" && (
+            <iframe src={`${url}#toolbar=0&navpanes=0`} title={`Vista previa ${file.name}`} />
+          )}
+          {url && file.contentType.startsWith("image/") && <img alt={file.name} src={url} />}
+          {file.contentType === "text/plain" && <pre>{text}</pre>}
+          {file.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && (
+            <div className="docx-preview-scroll">
+              {previewLoading && <p>ABRIENDO DOCUMENTO…</p>}
+              <div className="docx-preview-styles" ref={styleContainer} />
+              <div className="docx-preview-body" ref={documentContainer} />
+            </div>
+          )}
+          <span aria-hidden="true" className="preview-watermark">SPEAKEACOOL · MATERIAL DE CLASE</span>
+        </div>
+        <p className="preview-limit">Vista dentro del aula; no se puede garantizar la prevención de capturas o copias desde el dispositivo.</p>
+      </section>
+    </div>
   );
 }
 

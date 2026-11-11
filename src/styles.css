@@ -470,6 +470,19 @@ button, a, input, select, textarea { border-radius: 0 !important; }
 .auth-toggle { margin-top: 18px; padding: 0; border: 0; background: transparent; font-size: 10px; font-weight: 900; text-align: left; text-decoration: underline; cursor: pointer; }
 .auth-footnote { margin: 23px 0 0; padding-top: 12px; border-top: 1px solid var(--ink); font-size: 8px; font-weight: 900; letter-spacing: .07em; }
 .portal-content > .portal-feedback { margin: 20px 0; }
+.teacher-content-actions, .editor-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.learning-editor { display: grid; gap: 16px; margin: 20px 0; padding: 20px; border: 3px solid var(--ink); background: white; box-shadow: 5px 5px 0 var(--ink); }
+.learning-editor h2 { margin: 0; font-family: "Arial Black", Arial, sans-serif; font-size: 20px; }
+.editor-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.editor-fields label { display: grid; align-content: start; gap: 7px; }
+.editor-fields label > span, .publish-toggle { font-size: 8px; font-weight: 900; letter-spacing: .06em; }
+.editor-fields input, .editor-fields textarea { width: 100%; padding: 10px; border: 2px solid var(--ink); background: white; font: inherit; font-size: 11px; }
+.editor-wide { grid-column: 1 / -1; }
+.publish-toggle { display: flex; align-items: center; gap: 8px; }
+.content-state { position: absolute; bottom: 62px; left: 18px; display: inline-block; padding: 5px 7px; border: 1px solid var(--ink); background: #ffb4a3; font-size: 8px; font-weight: 900; }
+.content-state.published { background: var(--lime); }
+.content-card-actions { position: absolute; right: 15px; bottom: 62px; display: flex; gap: 10px; }
+.content-card-actions button { padding: 5px; border: 0; background: transparent; font-size: 8px; font-weight: 900; text-decoration: underline; cursor: pointer; }
 .unit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; margin-top: 27px; }
 .unit-card { position: relative; min-height: 340px; padding: 18px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--ink); }
 .unit-level { display: inline-block; padding: 5px 7px; border: 1px solid var(--ink); background: var(--lime); font-size: 8px; font-weight: 900; }
@@ -487,12 +500,29 @@ button, a, input, select, textarea { border-radius: 0 !important; }
 .practice-focus { font-size: 10px; font-weight: 900; }
 .practice-sheet > p:not(.practice-focus) { font-size: 12px; }
 .exercise-list { display: grid; gap: 14px; padding-left: 25px; font-size: 12px; }
-.writing-line { display: block; height: 16px; margin-top: 5px; border-bottom: 1px solid #999; }
+.exercise-list label { display: grid; gap: 7px; }
+.exercise-list input { width: 100%; min-height: 39px; padding: 8px; border: 2px solid var(--ink); background: white; font: inherit; }
+.practice-result { padding: 11px; border: 2px solid var(--ink); background: var(--lime); font-size: 10px !important; font-weight: 900; }
 .speaking-box { margin-top: 24px; padding: 14px; border: 2px solid var(--ink); background: var(--lime); }
 .speaking-box strong, .answer-key summary { font-size: 9px; font-weight: 900; letter-spacing: .08em; }
 .speaking-box p { margin-bottom: 0; font-size: 12px; }
 .answer-key { margin-top: 18px; padding-top: 12px; border-top: 2px solid var(--ink); }
 .answer-key ol { display: grid; gap: 6px; font-size: 11px; }
+.file-preview-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 75%); }
+.file-preview-dialog { width: min(1000px, 100%); height: min(88vh, 900px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: 14px; border: 3px solid var(--ink); background: var(--paper); box-shadow: 7px 7px 0 var(--lime); }
+.file-preview-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.file-preview-dialog > header strong { overflow-wrap: anywhere; font-size: 12px; }
+.file-preview-content { position: relative; min-height: 0; display: grid; place-items: center; overflow: auto; border: 2px solid var(--ink); background: white; }
+.file-preview-content iframe { width: 100%; height: 100%; border: 0; }
+.file-preview-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.file-preview-content pre { width: 100%; height: 100%; margin: 0; padding: 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: none; }
+.docx-preview-scroll { position: relative; width: 100%; height: 100%; overflow: auto; }
+.docx-preview-body { min-height: 100%; padding: 18px; }
+.docx-preview-body .docx-wrapper { background: white; }
+.docx-preview-body .docx { user-select: none; }
+.docx-preview-styles { display: none; }
+.preview-watermark { position: absolute; right: 14px; bottom: 14px; padding: 5px 8px; background: rgb(255 255 255 / 78%); font-size: 8px; font-weight: 900; pointer-events: none; }
+.preview-limit { margin: 0; font-size: 9px; line-height: 1.5; }
 .room-panel { margin-top: 28px; border: 2px solid var(--ink); background: white; box-shadow: 5px 5px 0 var(--ink); }
 .room-controls { display: grid; justify-items: start; gap: 16px; padding: clamp(18px, 4vw, 34px); }
 .room-controls > span { font-size: 8px; font-weight: 900; }
@@ -609,15 +639,18 @@ button, a, input, select, textarea { border-radius: 0 !important; }
   .meet-frame { min-height: 350px; aspect-ratio: auto; }
   .practice-heading { flex-direction: column; }
   .practice-actions { flex-wrap: wrap; }
+  .editor-fields { grid-template-columns: 1fr; }
+  .editor-wide { grid-column: auto; }
+  .file-preview-backdrop { padding: 8px; }
+  .file-preview-dialog { height: 94vh; padding: 9px; }
+  .docx-preview-body { padding: 8px; }
   .file-row { flex-wrap: wrap; }
   .file-row > div { flex: 1 1 calc(100% - 45px); }
   .file-action { margin-left: 30px; }
   .auth-page { padding-right: 16px; padding-left: 16px; }
 }
 @media print {
-  .portal-sidebar, .portal-topbar, .practice-actions, .portal-title, .brutal-eyebrow, .portal-intro, .portal-signoff, .unit-grid { display: none !important; }
+  .portal-sidebar, .portal-topbar, .practice-actions, .portal-title, .brutal-eyebrow, .portal-intro, .portal-signoff, .unit-grid, .practice-sheet, .file-preview-backdrop { display: none !important; }
   .portal-layout { display: block; }
   .portal-content { width: 100%; padding: 0; }
-  .practice-sheet { border: 0; box-shadow: none; }
-  .writing-line { height: 22px; }
 }

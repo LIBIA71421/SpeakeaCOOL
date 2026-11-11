@@ -6,35 +6,34 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isTeacher() {
+    function isOwner() {
       return signedIn()
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'owner';
     }
 
     match /files/{ownerUid}/{fileName} {
-      allow read: if signedIn() && (request.auth.uid == ownerUid || isTeacher());
-      allow create: if signedIn()
-        && (request.auth.uid == ownerUid || isTeacher())
+      allow read: if signedIn()
+        && (isOwner()
+          || request.auth.uid == ownerUid
+          || resource.metadata.uploadedBy == ownerUid);
+      allow create: if isOwner()
+        && request.auth.uid == ownerUid
         && request.resource.size <= 20 * 1024 * 1024
         && request.resource.contentType in [
           'application/pdf',
-          'application/msword',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'text/plain',
           'image/png',
           'image/jpeg'
         ]
-        && request.resource.metadata.uploadedBy == request.auth.uid;
+        && request.resource.metadata.uploadedBy == request.auth.uid
+        && request.resource.metadata.category == 'owner';
       allow update: if false;
-      allow delete: if signedIn()
-        && (
-          isTeacher()
-          || (
-            request.auth.uid == ownerUid
-            && resource.metadata.uploadedBy == request.auth.uid
-          )
-        );
+      allow delete: if isOwner()
+        || (signedIn()
+          && request.auth.uid == ownerUid
+          && resource.metadata.uploadedBy == request.auth.uid);
     }
   }
 }

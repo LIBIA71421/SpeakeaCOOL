@@ -30,11 +30,26 @@ import {
 } from "firebase/storage";
 import { getFirebaseApp } from "./firebaseApp";
 
+export type LearningContent = {
+  id: string;
+  level: string;
+  title: string;
+  goal: string;
+  topics: string[];
+  focus: string;
+  instructions: string;
+  exercises: string[];
+  answerKey: string[];
+  speakingPrompt: string;
+  published: boolean;
+  ownerUid: string;
+};
+
 export type AccountProfile = {
   uid: string;
   displayName: string;
   email: string;
-  role: "student" | "teacher";
+  role: "student" | "owner";
 };
 
 export type StoredFile = {
@@ -42,7 +57,7 @@ export type StoredFile = {
   name: string;
   ownerUid: string;
   uploadedBy: string;
-  category: "teacher" | "student";
+  category: "owner" | "teacher" | "student";
   storagePath: string;
   contentType: string;
   createdAt: string;
@@ -112,7 +127,10 @@ export async function getAccountProfile(user: User): Promise<AccountProfile> {
   }
 
   const data = profileSnapshot.data();
-  if (data.role !== "student" && data.role !== "teacher") {
+  if (data.role === "teacher") {
+    throw new Error("La cuenta conserva el rol anterior de tutor. El propietario del proyecto debe cambiar users/{uid}.role a owner en Firebase Console.");
+  }
+  if (data.role !== "student" && data.role !== "owner") {
     throw new Error("La cuenta no tiene un rol válido. Contacta al tutor.");
   }
 
@@ -126,32 +144,37 @@ export async function getAccountProfile(user: User): Promise<AccountProfile> {
 
 export async function listStoredFiles(profile: AccountProfile): Promise<StoredFile[]> {
   const { database } = getServices();
-  const filesQuery =
-    profile.role === "teacher"
-      ? query(collection(database, "userFiles"), limit(100))
-      : query(
-          collection(database, "userFiles"),
-          where("ownerUid", "==", profile.uid),
-          limit(100),
-        );
-  const snapshot = await getDocs(filesQuery);
-
-  return Promise.all(
-    snapshot.docs.map(async (fileDocument) => {
-      const data = fileDocument.data();
-      const storagePath = String(data.storagePath);
-      return {
-        id: fileDocument.id,
-        name: String(data.name),
-        ownerUid: String(data.ownerUid),
-        uploadedBy: String(data.uploadedBy),
-        category: data.category === "teacher" ? "teacher" : "student",
-        storagePath,
-        contentType: String(data.contentType),
-        createdAt: data.createdAt?.toDate?.().toISOString?.() ?? "",
-      };
-    }),
+  const filesCollection = collection(database, "userFiles");
+  const snapshots =
+    profile.role === "owner"
+      ? [await getDocs(query(filesCollection, limit(100)))]
+      : await Promise.all([
+          getDocs(query(filesCollection, where("category", "in", ["owner", "teacher"]), limit(100))),
+          getDocs(query(filesCollection, where("ownerUid", "==", profile.uid), limit(100))),
+        ]);
+  const files = new Map(
+    snapshots.flatMap((snapshot) =>
+      snapshot.docs.map((fileDocument) => {
+        const data = fileDocument.data();
+        return [
+          fileDocument.id,
+          {
+            id: fileDocument.id,
+            name: String(data.name),
+            ownerUid: String(data.ownerUid),
+            uploadedBy: String(data.uploadedBy),
+            category: data.category === "owner" || data.category === "teacher"
+              ? data.category
+              : "student",
+            storagePath: String(data.storagePath),
+            contentType: String(data.contentType),
+            createdAt: data.createdAt?.toDate?.().toISOString?.() ?? "",
+          },
+        ] as const;
+      }),
+    ),
   );
+  return [...files.values()].slice(0, 100);
 }
 
 export async function listStudentAccounts(): Promise<StudentAccount[]> {
@@ -173,7 +196,6 @@ export async function uploadAccountFile(
   file: File,
   ownerUid: string,
   uploadedBy: string,
-  category: StoredFile["category"],
 ): Promise<void> {
   const { database, storage } = getServices();
   const safeName = file.name.replace(/[^\w.-]+/g, "_").slice(0, 120);
@@ -181,14 +203,14 @@ export async function uploadAccountFile(
   const storageRef = ref(storage, storagePath);
   await uploadBytes(storageRef, file, {
     contentType: file.type || "application/octet-stream",
-    customMetadata: { uploadedBy },
+    customMetadata: { uploadedBy, category: "owner" },
   });
 
   try {
     await addDoc(collection(database, "userFiles"), {
       ownerUid,
       uploadedBy,
-      category,
+      category: "owner",
       name: file.name,
       contentType: file.type || "application/octet-stream",
       storagePath,
@@ -204,6 +226,51 @@ export async function downloadAccountFile(file: StoredFile): Promise<Blob> {
   const { storage } = getServices();
   const bytes = await getBytes(ref(storage, file.storagePath));
   return new Blob([bytes], { type: file.contentType });
+}
+
+export async function listLearningContent(profile: AccountProfile): Promise<LearningContent[]> {
+  const { database } = getServices();
+  const contentCollection = collection(database, "learningContent");
+  const contentQuery =
+    profile.role === "owner"
+      ? query(contentCollection, limit(100))
+      : query(contentCollection, where("published", "==", true), limit(100));
+  const snapshot = await getDocs(contentQuery);
+  return snapshot.docs.map((item) => ({
+    id: item.id,
+    ...(item.data() as Omit<LearningContent, "id">),
+  }));
+}
+
+export async function saveLearningContent(
+  profile: AccountProfile,
+  content: Omit<LearningContent, "id" | "ownerUid">,
+  id?: string,
+): Promise<void> {
+  if (profile.role !== "owner") throw new Error("Solo el propietario puede editar los materiales.");
+  const { database } = getServices();
+  const contentRef = id
+    ? doc(database, "learningContent", id)
+    : doc(collection(database, "learningContent"));
+  const payload = {
+    ...content,
+    ownerUid: profile.uid,
+    updatedAt: serverTimestamp(),
+  };
+  if (id) {
+    await setDoc(contentRef, payload, { merge: true });
+  } else {
+    await setDoc(contentRef, { ...payload, createdAt: serverTimestamp() });
+  }
+}
+
+export async function deleteLearningContent(
+  profile: AccountProfile,
+  id: string,
+): Promise<void> {
+  if (profile.role !== "owner") throw new Error("Solo el propietario puede eliminar materiales.");
+  const { database } = getServices();
+  await deleteDoc(doc(database, "learningContent", id));
 }
 
 export async function removeAccountFile(file: StoredFile): Promise<void> {
