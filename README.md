@@ -28,11 +28,10 @@ El backend (`worker/`) usa Cloudflare Workers y no Firebase Cloud Functions. El 
 1. Crea una cuenta Cloudflare y activa Workers (plan Free).
 2. Desde la carpeta `worker/`, ejecuta `npm install`.
 3. Inicia sesión en Cloudflare con `npx wrangler login`.
-4. Añade tu clave de Google AI Studio con cuota gratuita como secreto privado: `npx wrangler secret put GEMINI_API_KEY`.
-5. Ejecuta `npm run deploy`. Cloudflare imprimirá una URL `https://speakeacool-study-assistant.<tu-subdominio>.workers.dev`.
-6. En GitHub → Settings → Secrets and variables → Actions, crea el secreto `VITE_STUDY_ASSISTANT_URL` con esa URL y vuelve a publicar `main`. El workflow de Pages la inyecta al compilar el front.
+4. Añade tu clave nueva de Google AI Studio como secreto privado: `npx wrangler secret put GEMINI_API_KEY`.
+5. Ejecuta `npm run deploy`. El frontend ya apunta a `https://speakeacool-study-assistant.speakeacool.workers.dev`.
 
-El Worker valida criptográficamente los ID tokens de Firebase, aplica los permisos de Firestore/Storage al recuperar documentos, y llama a Gemini desde el servidor. Recupera las guías y archivos TXT; también puede enviar un PDF pequeño (hasta 4 MB) al modelo. DOC/DOCX e imágenes se pueden almacenar, pero no se incluyen en el contexto del RAG. La recuperación de texto usa coincidencia de términos, sin embeddings ni base vectorial. Gemini responde con personalidad Spanglish, humor irreverente moderado y voz del navegador mediante SpeechSynthesis. Nunca guardes la clave Gemini en la app web ni en Git.
+El Worker valida criptográficamente los ID tokens de Firebase, aplica los permisos de Firestore/Storage al recuperar documentos, y llama a Gemini desde el servidor. Recupera las guías y archivos TXT; también puede enviar un PDF pequeño (hasta 4 MB) al modelo. DOC/DOCX e imágenes se pueden almacenar, pero no se incluyen en el contexto del RAG. La recuperación de texto usa coincidencia de términos, sin embeddings ni base vectorial. Gemini responde con personalidad Spanglish, humor irreverente moderado y voz del navegador mediante SpeechSynthesis. Nunca guardes la clave Gemini en la app web ni en Git. La URL del Worker es pública y no requiere un secreto de GitHub.
 
 La personalidad está diseñada como grosera y divertida sin dirigir insultos ni humillar al estudiante. El Worker aplica un límite básico por instancia y los proveedores gratuitos pueden cambiar sus límites, disponibilidad o condiciones; comprueba el panel de uso de Cloudflare y Google AI Studio.
 

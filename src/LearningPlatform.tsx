@@ -39,7 +39,9 @@ import { practiceSheets, studyUnits } from "./studyMaterials";
 type Props = { onExit: () => void };
 type Section = "home" | "materials" | "room" | "library" | "assistant";
 
-const assistantEndpoint = import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined;
+const assistantEndpoint =
+  (import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined) ||
+  "https://speakeacool-study-assistant.speakeacool.workers.dev";
 const allowedFileTypes = ".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg";
 const speechService = new SpeechService();
 
@@ -339,7 +341,7 @@ function PortalDashboard({
   async function askAssistant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!assistantEndpoint) {
-      setAssistantError("Falta configurar la URL de Cloudflare Worker. Añade VITE_STUDY_ASSISTANT_URL en los secretos del repositorio y vuelve a publicar la web.");
+      setAssistantError("Falta configurar la URL del asistente. Revisa la configuración del sitio.");
       return;
     }
     setAsking(true);
