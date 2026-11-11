@@ -1,0 +1,10 @@
+name = "speakeacool-study-assistant"
+main = "index.js"
+compatibility_date = "2025-10-11"
+workers_dev = true
+
+[vars]
+FIREBASE_PROJECT_ID = "speakeacool"
+FIREBASE_STORAGE_BUCKET = "speakeacool.firebasestorage.app"
+GEMINI_MODEL = "gemini-2.5-flash"
+ALLOWED_ORIGINS = "https://libia71421.github.io,http://localhost:5173"

@@ -39,9 +39,7 @@ import { practiceSheets, studyUnits } from "./studyMaterials";
 type Props = { onExit: () => void };
 type Section = "home" | "materials" | "room" | "library" | "assistant";
 
-const assistantEndpoint =
-  (import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined) ||
-  "https://us-central1-speakeacool.cloudfunctions.net/studyAssistant";
+const assistantEndpoint = import.meta.env.VITE_STUDY_ASSISTANT_URL as string | undefined;
 const allowedFileTypes = ".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg";
 const speechService = new SpeechService();
 
@@ -341,7 +339,7 @@ function PortalDashboard({
   async function askAssistant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!assistantEndpoint) {
-      setAssistantError("EL ASISTENTE RAG AÚN NO ESTÁ CONECTADO. Configura VITE_STUDY_ASSISTANT_URL cuando el backend esté disponible.");
+      setAssistantError("Falta configurar la URL de Cloudflare Worker. Añade VITE_STUDY_ASSISTANT_URL en los secretos del repositorio y vuelve a publicar la web.");
       return;
     }
     setAsking(true);
@@ -768,10 +766,10 @@ function AssistantSection({
       <h1 className="portal-title">PREGUNTA.<br /><span>COMPRENDE.</span></h1>
       <p className="portal-intro">Consulta tus documentos y el material de estudio. Las respuestas deben basarse en los archivos a los que tienes acceso.</p>
       <div className={`assistant-status${connected ? " connected" : ""}`}>
-        <span><i /> {connected ? "BACKEND CONFIGURADO" : "ESPERANDO CONEXIÓN DEL BACKEND"}</span>
+        <span><i /> {connected ? "CLOUDFLARE WORKER CONECTADO" : "ESPERANDO CONFIGURACIÓN DE CLOUDFLARE"}</span>
         <p>{connected
-          ? "El asistente enviará la pregunta y los identificadores de tus archivos al endpoint configurado. El backend debe validar el token Firebase y aplicar permisos antes de recuperar documentos."
-          : "La interfaz está preparada, pero todavía no se consultan documentos con IA. Configura un backend seguro que autentique Firebase, extraiga texto, genere embeddings y aplique permisos por usuario."}</p>
+          ? "El asistente usa un servicio Worker y Gemini; el token Firebase se valida en el backend antes de consultar archivos permitidos."
+          : "La interfaz está preparada, pero todavía no consulta documentos. Despliega worker/ en Cloudflare y configura la URL resultante como VITE_STUDY_ASSISTANT_URL."}</p>
       </div>
       <form className="assistant-form" onSubmit={(event) => void onSubmit(event)}>
         <label htmlFor="assistant-question">¿QUÉ QUIERES ENTENDER?</label>
@@ -815,7 +813,7 @@ function AssistantSection({
       )}
       <div className="assistant-contract">
         <strong>CONTRATO DE API</strong>
-        <code>POST {"{question, documentIds}"} · Authorization: Bearer &lt;Firebase ID token&gt; · {"{answer, sources}"}</code>
+        <code>Cloudflare Worker · Firebase ID token · Gemini API · {"{answer, sources}"}</code>
       </div>
     </section>
   );

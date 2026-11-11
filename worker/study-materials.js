@@ -1,4 +1,4 @@
-module.exports = [
+export const studyMaterials = [
   {
     id: "practice-a1",
     name: "A1 · Present simple y rutinas",
